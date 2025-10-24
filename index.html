@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>摩托车配件商城</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1>摩托车配件商城</h1>
+  </header>
+
+  <main>
+    <!-- 筛选区域 -->
+    <div class="filters">
+      <div class="filter-group">
+        <label>按车型筛选：</label>
+        <div class="filter-buttons">
+          <button class="filter-btn" data-filter="model" data-value="">全部车型</button>
+          <button class="filter-btn" data-filter="model" data-value="CG125">CG125</button>
+          <button class="filter-btn" data-filter="model" data-value="GN125">GN125</button>
+          <button class="filter-btn" data-filter="model" data-value="CD110">CD110</button>
+          <button class="filter-btn" data-filter="model" data-value="Bajaj100">Bajaj100</button>
+          <button class="filter-btn" data-filter="model" data-value="TVS Star">TVS Star</button>
+          <button class="filter-btn" data-filter="model" data-value="TVS HLX">TVS HLX</button>
+          <button class="filter-btn" data-filter="model" data-value="WY125">WY125</button>
+          <button class="filter-btn" data-filter="model" data-value="CGL125">CGL125</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>按部位筛选：</label>
+        <div class="filter-buttons">
+          <button class="filter-btn" data-filter="part" data-value="">全部部位</button>
+          <button class="filter-btn" data-filter="part" data-value="传动系统">传动系统</button>
+          <button class="filter-btn" data-filter="part" data-value="制动系统">制动系统</button>
+          <button class="filter-btn" data-filter="part" data-value="行驶系统">行驶系统</button>
+          <button class="filter-btn" data-filter="part" data-value="轮胎">轮胎</button>
+          <button class="filter-btn" data-filter="part" data-value="发动机部件">发动机部件</button>
+          <button class="filter-btn" data-filter="part" data-value="滤清器">滤清器</button>
+          <button class="filter-btn" data-filter="part" data-value="电气系统">电气系统</button>
+          <button class="filter-btn" data-filter="part" data-value="车身配件">车身配件</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 重置按钮 -->
+    <div class="reset-section">
+      <button id="reset-filters" class="reset-btn">重置筛选</button>
+    </div>
+
+    <!-- 产品列表 -->
+    <div id="product-list" class="product-grid">
+      <!-- 由 JS 渲染 -->
+    </div>
+  </main>
+
+  <!-- 全局变量存储数据 -->
+  <script>
+    let allProducts = [];
+    let currentModelFilter = '';
+    let currentPartFilter = '';
+
+    // 从 JSON 加载数据
+    fetch('products.json')
+      .then(response => response.json())
+      .then(data => {
+        allProducts = data;
+        renderProducts(allProducts);
+      })
+      .catch(error => console.error('加载产品数据失败:', error));
+  </script>
+
+  <!-- 筛选与渲染逻辑 -->
+  <script>
+    // 1. 渲染产品列表
+    function renderProducts(products) {
+      const container = document.getElementById('product-list');
+      container.innerHTML = products.map(p => {
+        // 默认主图
+        const mainImage = (p.images && p.images[0]) ? p.images[0].url : 'images/placeholder.jpg';
+        const mainImageCaption = (p.images && p.images[0]) ? p.images[0].caption || '' : '';
+
+        // 附图缩略图
+        const thumbnails = (p.images && p.images.slice(1)) ? p.images.slice(1).map(img => `
+          <div class="thumb-container">
+            <img src="${img.url}" class="thumb" alt="附图" onclick="swapImage(this, '${p.id}')">
+            ${img.caption ? `<p class="thumb-caption">${img.caption}</p>` : ''}
+          </div>
+        `).join('') : '';
+
+        // 产品信息
+        const details = `
+          <p><strong>型号:</strong> ${p.model || 'N/A'}</p>
+          <p><strong>尺寸:</strong> ${p.size || 'N/A'}</p>
+          <p><strong>重量:</strong> ${p.weight || 'N/A'}</p>
+          <p><strong>包装:</strong> ${p.packaging || 'N/A'}</p>
+          <p><strong>每箱数量:</strong> ${p.quantity_per_box || 'N/A'}</p>
+          <p><strong>价格:</strong> ¥${p.price}</p>
+          <p><strong>起订量:</strong> ${p.min_order_qty || 'N/A'}</p>
+          <p><strong>其他描述:</strong> ${p.description || 'N/A'}</p>
+        `;
+
+        return `
+          <div class="product" data-models="${p.models.join(', ')}" data-part="${p.part}">
+            <div class="image-section">
+              <img src="${mainImage}" class="main-image" id="main-${p.id}" alt="${p.name}">
+              ${mainImageCaption ? `<p class="main-caption">${mainImageCaption}</p>` : ''}
+              <div class="thumbnails">
+                ${thumbnails}
+              </div>
+            </div>
+            <div class="info-section">
+              <h3>${p.name}</h3>
+              ${details}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 2. 筛选逻辑
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const filterType = btn.getAttribute('data-filter');
+        const filterValue = btn.getAttribute('data-value');
+
+        if (filterType === 'model') {
+          currentModelFilter = filterValue;
+        } else if (filterType === 'part') {
+          currentPartFilter = filterValue;
+        }
+
+        // 更新按钮选中状态
+        document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // 应用筛选
+        applyFilters();
+      });
+    });
+
+    // 3. 应用筛选
+    function applyFilters() {
+      const filtered = allProducts.filter(p => {
+        const matchesModel = currentModelFilter === '' || p.models.includes(currentModelFilter);
+        const matchesPart = currentPartFilter === '' || p.part === currentPartFilter;
+        return matchesModel && matchesPart;
+      });
+      renderProducts(filtered);
+    }
+
+    // 4. 重置筛选
+    document.getElementById('reset-filters').addEventListener('click', () => {
+      currentModelFilter = '';
+      currentPartFilter = '';
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('.filter-btn[data-value=""]').classList.add('active'); // 全部车型
+      document.querySelector('.filter-btn[data-value=""][data-filter="part"]').classList.add('active'); // 全全部位
+      renderProducts(allProducts);
+    });
+
+    // 5. 切换主图
+    function swapImage(thumb, productId) {
+      const newSrc = thumb.src;
+      document.getElementById(`main-${productId}`).src = newSrc;
+    }
+  </script>
+
+</body>
+</html>
