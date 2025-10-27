@@ -71,22 +71,28 @@
         return rawVal;
     };
 
-    // 辅助函数 2：【新增】自动转换 Google Drive 共享链接为直接内容链接
-    function transformDriveLink(url) {
-        if (!url || typeof url !== 'string') return url;
+   // 辅助函数 2：【修复】自动转换 Google Drive 共享链接为直接内容链接
+function transformDriveLink(url) {
+    if (!url || typeof url !== 'string') return url;
 
-        // 匹配 drive.google.com/file/d/FILE_ID/view 的格式
-        const match = url.match(/https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)\/view/);
-        
-        if (match && match[1]) {
-            const fileId = match[1];
-            // 构造可以直接加载内容的链接
-            return `https://drive.google.com/uc?export=view&id=${fileId}`;
-        }
-        
-        // 如果不是标准 Google Drive 共享链接，返回原链接（可能是外部 CDN 或其他服务）
-        return url;
+    // 优化的正则表达式：
+    // 1. 匹配标准共享格式：/file/d/FILE_ID/view
+    // 2. 匹配文件夹共享格式：/open?id=FILE_ID
+    // 3. 匹配 /d/FILE_ID 的所有格式
+    
+    // 正则表达式将忽略末尾的任何参数 (?...)
+    const match = url.match(/https?:\/\/drive\.google\.com\/((?:file|open)\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
+
+    if (match && match[2]) {
+        // match[2] 是捕获到的文件 ID
+        const fileId = match[2];
+        // 构造可以直接加载内容的链接
+        return `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
+    
+    // 如果不是 Google Drive 链接，返回原链接
+    return url;
+}
 
     // =======================================================
     // 1. 数据获取主函数 
