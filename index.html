@@ -16,8 +16,8 @@
     <div class="filters">
       <div class="filter-group">
         <label>按车型筛选：</label>
-        <div class="filter-buttons">
-          <button class="filter-btn" data-filter="model" data-value="">全部车型</button>
+        <div class="filter-buttons" id="model-filters">
+          <button class="filter-btn active" data-filter="model" data-value="">全部车型</button>
           <button class="filter-btn" data-filter="model" data-value="CG125">CG125</button>
           <button class="filter-btn" data-filter="model" data-value="GN125">GN125</button>
           <button class="filter-btn" data-filter="model" data-value="CD110">CD110</button>
@@ -31,16 +31,8 @@
 
       <div class="filter-group">
         <label>按部位筛选：</label>
-        <div class="filter-buttons">
-          <button class="filter-btn" data-filter="part" data-value="">全部部位</button>
-          <button class="filter-btn" data-filter="part" data-value="传动系统">传动系统</button>
-          <button class="filter-btn" data-filter="part" data-value="制动系统">制动系统</button>
-          <button class="filter-btn" data-filter="part" data-value="行驶系统">行驶系统</button>
-          <button class="filter-btn" data-filter="part" data-value="轮胎">轮胎</button>
-          <button class="filter-btn" data-filter="part" data-value="发动机部件">发动机部件</button>
-          <button class="filter-btn" data-filter="part" data-value="滤清器">滤清器</button>
-          <button class="filter-btn" data-filter="part" data-value="电气系统">电气系统</button>
-          <button class="filter-btn" data-filter="part" data-value="车身配件">车身配件</button>
+        <div class="filter-buttons" id="part-filters">
+          <button class="filter-btn active" data-filter="part" data-value="">全部部位</button>
         </div>
       </div>
     </div>
@@ -64,12 +56,23 @@
     let currentPartFilter = '';
     
     // =======================================================
-    // 谷歌表格 API 配置
+    // 谷歌表格 API 配置 - 使用 Document ID
     // =======================================================
     const SHEET_DATA_URL = 'https://docs.google.com/spreadsheets/d/1_20vmfXJly3oPTEIMdSAPWy8bcUxi2pn__hcAF7gA3Q/gviz/tq?tqx=out:json&tq&gid=0';
+    
+    // 辅助函数：安全获取单元格的值并清理空格 (修复筛选的关键)
+    const getTrimmedVal = (row, index) => {
+        const cell = row.c[index];
+        if (!cell) return null;
+        let rawVal = cell.v || cell.f;
+        if (typeof rawVal === 'string') {
+            return rawVal.trim(); 
+        }
+        return rawVal;
+    };
 
     // =======================================================
-    // 1. 数据获取主函数 (取代了原来的 fetch('products.json'))
+    // 1. 数据获取主函数 
     // =======================================================
     async function fetchProducts() {
         const container = document.getElementById('product-list');
@@ -86,6 +89,12 @@
             // 转换为产品数组，并赋值给全局变量
             allProducts = transformSheetData(data);
             
+            // !!! 核心改进：动态生成筛选按钮 !!!
+            renderFilters(allProducts); 
+            
+            // 绑定所有筛选按钮事件 (包括静态和动态生成的)
+            bindFilterEvents();
+            
             // 渲染产品列表
             renderProducts(allProducts); 
 
@@ -96,58 +105,46 @@
     }
 
     // =======================================================
-    // 2. A 到 S 列结构定制的转换函数 (精确映射到旧的 JS 键名)
+    // 2. A 到 S 列结构定制的转换函数 (包含 .trim() 修复)
     // =======================================================
     function transformSheetData(sheetData) {
         const rows = sheetData.table.rows;   
         
         // 过滤掉标题行 (假设 B 列是标题“名称”) 和空行
         const filteredRows = rows.filter(row => {
-            const name = row.c[1] && row.c[1].v !== undefined ? row.c[1].v : null;
+            const name = getTrimmedVal(row, 1);
             return name && name !== '名称';
         });
 
         const productArray = filteredRows.map(row => {
-            // 检查 row.c[i] 是否存在，并优先使用 .v (值) 或 .f (格式化值)
-            const getVal = (index) => row.c[index] ? (row.c[index].v || row.c[index].f) : null;
             const product = {};
             
-            // --- 映射到旧 JS 的键名 ---
-            
-            // A 列: 商品 ID -> p.id (用于图片切换)
-            product.id = getVal(0); 
-            
-            // B 列: 名称 -> p.name
-            product.name = getVal(1);
-            
-            // C 列: 部位类型 -> p.part (用于筛选)
-            product.part = getVal(2);
+            // C 列: 部位类型 -> p.part (用于筛选，已清理)
+            product.part = getTrimmedVal(row, 2);
 
-            // D 列: 车型 -> p.models (数组, 用于筛选)
-            // 你的筛选逻辑需要 p.models 是一个数组，即使只有一个车型
-            const modelVal = getVal(3);
+            // D 列: 车型 -> p.models (数组, 用于筛选，已清理)
+            const modelVal = getTrimmedVal(row, 3);
             product.models = modelVal ? [modelVal] : []; 
             
-            // E 到 J 列: 规格信息
-            product.size = getVal(4);      // E 列: 尺寸
-            product.weight = getVal(5);    // F 列: 重量
-            product.price = getVal(6) ? parseFloat(getVal(6)) : 0; // G 列: 价格
-            product.packaging = getVal(7); // H 列: 包装方式
-            product.quantity_per_box = getVal(8) ? parseInt(getVal(8)) : null; // I 列: 每箱数量
-            product.min_order_qty = getVal(9) ? parseInt(getVal(9)) : 1; // J 列: 起订量
-
-            // K 到 N 列: 描述和状态
-            product.description_main = getVal(10); // K 列: 描述 (新键名，避免冲突)
-            product.description = getVal(11); // L 列: 其他描述 -> 映射到 p.description (旧 JS 使用)
-            product.status = getVal(12);    // M 列: 状态
-            product.notes = getVal(13);     // N 列: 备注
+            // ... (其它 16 个字段的映射保持不变)
+            product.id = getTrimmedVal(row, 0); 
+            product.name = getTrimmedVal(row, 1);
+            product.size = getTrimmedVal(row, 4);      
+            product.weight = getTrimmedVal(row, 5);    
+            product.price = getTrimmedVal(row, 6) ? parseFloat(getTrimmedVal(row, 6)) : 0; 
+            product.packaging = getTrimmedVal(row, 7); 
+            product.quantity_per_box = getTrimmedVal(row, 8) ? parseInt(getTrimmedVal(row, 8)) : null; 
+            product.min_order_qty = getTrimmedVal(row, 9) ? parseInt(getTrimmedVal(row, 9)) : 1; 
+            product.description_main = getTrimmedVal(row, 10); 
+            product.description = getTrimmedVal(row, 11); 
+            product.status = getTrimmedVal(row, 12);    
+            product.notes = getTrimmedVal(row, 13);     
             
-            // O 到 S 列: 图片链接 -> 映射到 p.images 数组结构 (旧 JS 使用)
+            // O 到 S 列: 图片链接 -> 映射到 p.images 数组结构 
             product.images = [];
             for(let i = 14; i <= 18; i++) {
-                const url = getVal(i);
+                const url = getTrimmedVal(row, i);
                 if (url) {
-                    // 我们假设图片没有 caption
                     product.images.push({ url: url, caption: null });
                 }
             }
@@ -160,21 +157,111 @@
 
         return productArray; 
     }
+    
+    // =======================================================
+    // 3. 动态生成筛选按钮 (核心改进)
+    // =======================================================
+    function renderFilters(products) {
+        // 收集所有唯一的部位类型 (Set 自动去重)
+        const partTypes = new Set();
+        products.forEach(p => {
+            if (p.part) {
+                partTypes.add(p.part);
+            }
+        });
+        
+        const partFilterContainer = document.getElementById('part-filters');
+        
+        // 1. 保留“全部部位”按钮
+        const allPartsButton = partFilterContainer.querySelector('.filter-btn[data-filter="part"][data-value=""]');
+        partFilterContainer.innerHTML = '';
+        if (allPartsButton) {
+            partFilterContainer.appendChild(allPartsButton);
+        }
+        
+        // 2. 生成动态按钮
+        partTypes.forEach(part => {
+            const button = document.createElement('button');
+            button.className = 'filter-btn';
+            button.setAttribute('data-filter', 'part');
+            button.setAttribute('data-value', part);
+            button.textContent = part;
+            
+            partFilterContainer.appendChild(button);
+        });
+    }
 
-    // 启动数据加载流程
-    fetchProducts(); 
-  </script>
+    // =======================================================
+    // 4. 统一绑定所有筛选按钮事件 (适用于静态和动态生成的按钮)
+    // =======================================================
+    function bindFilterEvents() {
+        // 移除旧的事件监听器 (避免重复绑定)
+        // 注意：由于是动态替换元素内容，这里理论上不需要手动移除，但统一绑定更安全
+        
+        // 绑定所有 .filter-btn 按钮
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            // 先移除可能存在的旧监听器，然后添加新监听器
+            btn.removeEventListener('click', handleFilterClick); 
+            btn.addEventListener('click', handleFilterClick);
+        });
+        
+        // 初始化时，确保“全部”按钮处于 active 状态
+        document.querySelector('.filter-btn[data-filter="model"][data-value=""]').classList.add('active');
+        document.querySelector('.filter-btn[data-filter="part"][data-value=""]').classList.add('active');
+    }
+    
+    // 5. 核心事件处理函数
+    function handleFilterClick() {
+        const btn = this; 
+        const filterType = btn.getAttribute('data-filter');
+        const filterValue = btn.getAttribute('data-value');
 
-  <script>
-    // 1. 渲染产品列表
+        if (filterType === 'model') {
+            currentModelFilter = filterValue;
+        } else if (filterType === 'part') {
+            currentPartFilter = filterValue;
+        }
+
+        // 更新按钮选中状态
+        document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // 应用筛选
+        applyFilters();
+    }
+
+
+    // 6. 应用筛选
+    function applyFilters() {
+      const filtered = allProducts.filter(p => {
+        // 筛选逻辑依赖于 transformSheetData 中 p.models 和 p.part 的准确性
+        const matchesModel = currentModelFilter === '' || p.models.includes(currentModelFilter);
+        const matchesPart = currentPartFilter === '' || p.part === currentPartFilter;
+        return matchesModel && matchesPart;
+      });
+      renderProducts(filtered);
+    }
+
+    // 7. 重置筛选
+    document.getElementById('reset-filters').addEventListener('click', () => {
+      currentModelFilter = '';
+      currentPartFilter = '';
+      
+      // 重置按钮的 active 状态
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('.filter-btn[data-filter="model"][data-value=""]').classList.add('active'); 
+      document.querySelector('.filter-btn[data-filter="part"][data-value=""]').classList.add('active'); 
+      
+      renderProducts(allProducts);
+    });
+    
+    // 8. 渲染产品列表 (与你原来的逻辑保持一致)
     function renderProducts(products) {
       const container = document.getElementById('product-list');
       container.innerHTML = products.map(p => {
-        // 默认主图
         const mainImage = (p.images && p.images[0]) ? p.images[0].url : 'images/placeholder.jpg';
         const mainImageCaption = (p.images && p.images[0]) ? p.images[0].caption || '' : '';
 
-        // 附图缩略图
         const thumbnails = (p.images && p.images.slice(1)) ? p.images.slice(1).map(img => `
           <div class="thumb-container">
             <img src="${img.url}" class="thumb" alt="附图" onclick="swapImage(this, '${p.id}')">
@@ -182,7 +269,6 @@
           </div>
         `).join('') : '';
 
-        // 产品信息
         const details = `
           <p><strong>型号:</strong> ${p.models.join(', ') || 'N/A'}</p>
           <p><strong>尺寸:</strong> ${p.size || 'N/A'}</p>
@@ -211,66 +297,23 @@
         `;
       }).join('');
       
-      // 如果没有产品，显示提示
       if (products.length === 0 && container.innerHTML === '') {
           container.innerHTML = '<p>没有找到符合条件的产品。</p>';
       }
     }
 
-    // 2. 筛选逻辑 (使用事件代理监听点击)
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const filterType = btn.getAttribute('data-filter');
-        const filterValue = btn.getAttribute('data-value');
-
-        if (filterType === 'model') {
-          currentModelFilter = filterValue;
-        } else if (filterType === 'part') {
-          currentPartFilter = filterValue;
-        }
-
-        // 更新按钮选中状态
-        document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        // 应用筛选
-        applyFilters();
-      });
-    });
-
-    // 3. 应用筛选
-    function applyFilters() {
-      const filtered = allProducts.filter(p => {
-        // 车型筛选：检查产品的 p.models 数组是否包含当前筛选值，或者当前筛选值为空
-        const matchesModel = currentModelFilter === '' || p.models.includes(currentModelFilter);
-        // 部位筛选：检查 p.part 是否等于当前筛选值，或者当前筛选值为空
-        const matchesPart = currentPartFilter === '' || p.part === currentPartFilter;
-        return matchesModel && matchesPart;
-      });
-      renderProducts(filtered);
-    }
-
-    // 4. 重置筛选
-    document.getElementById('reset-filters').addEventListener('click', () => {
-      currentModelFilter = '';
-      currentPartFilter = '';
-      // 重置按钮的 active 状态
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      document.querySelector('.filter-btn[data-filter="model"][data-value=""]').classList.add('active'); 
-      document.querySelector('.filter-btn[data-filter="part"][data-value=""]').classList.add('active'); 
-      
-      renderProducts(allProducts);
-    });
-
-    // 5. 切换主图
+    // 9. 切换主图
     function swapImage(thumb, productId) {
       const newSrc = thumb.src;
-      // 确保找到对应 ID 的主图
       const mainImageElement = document.getElementById(`main-${productId}`);
       if (mainImageElement) {
          mainImageElement.src = newSrc;
       }
     }
+
+
+    // 启动数据加载流程
+    fetchProducts(); 
   </script>
 
 </body>
