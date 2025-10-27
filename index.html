@@ -1,173 +1,157 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>摩托车配件商城</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>摩托车配件商店</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <header>
-    <h1>摩托车配件商城</h1>
-  </header>
+    <header>
+        <h1>摩托车配件商城</h1>
+        <nav>
+            </nav>
+    </header>
 
-  <main>
-    <!-- 筛选区域 -->
-    <div class="filters">
-      <div class="filter-group">
-        <label>按车型筛选：</label>
-        <div class="filter-buttons">
-          <button class="filter-btn" data-filter="model" data-value="">全部车型</button>
-          <button class="filter-btn" data-filter="model" data-value="CG125">CG125</button>
-          <button class="filter-btn" data-filter="model" data-value="GN125">GN125</button>
-          <button class="filter-btn" data-filter="model" data-value="CD110">CD110</button>
-          <button class="filter-btn" data-filter="model" data-value="Bajaj100">Bajaj100</button>
-          <button class="filter-btn" data-filter="model" data-value="TVS Star">TVS Star</button>
-          <button class="filter-btn" data-filter="model" data-value="TVS HLX">TVS HLX</button>
-          <button class="filter-btn" data-filter="model" data-value="WY125">WY125</button>
-          <button class="filter-btn" data-filter="model" data-value="CGL125">CGL125</button>
+    <main>
+        <h2>产品列表</h2>
+        <div id="product-container" class="product-grid">
+            <p>正在从 Google Sheets 加载产品数据...</p>
         </div>
-      </div>
+    </main>
 
-      <div class="filter-group">
-        <label>按部位筛选：</label>
-        <div class="filter-buttons">
-          <button class="filter-btn" data-filter="part" data-value="">全部部位</button>
-          <button class="filter-btn" data-filter="part" data-value="传动系统">传动系统</button>
-          <button class="filter-btn" data-filter="part" data-value="制动系统">制动系统</button>
-          <button class="filter-btn" data-filter="part" data-value="行驶系统">行驶系统</button>
-          <button class="filter-btn" data-filter="part" data-value="轮胎">轮胎</button>
-          <button class="filter-btn" data-filter="part" data-value="发动机部件">发动机部件</button>
-          <button class="filter-btn" data-filter="part" data-value="滤清器">滤清器</button>
-          <button class="filter-btn" data-filter="part" data-value="电气系统">电气系统</button>
-          <button class="filter-btn" data-filter="part" data-value="车身配件">车身配件</button>
-        </div>
-      </div>
-    </div>
+    <footer>
+        <p>&copy; 2024 摩托车配件商店</p>
+    </footer>
 
-    <!-- 重置按钮 -->
-    <div class="reset-section">
-      <button id="reset-filters" class="reset-btn">重置筛选</button>
-    </div>
+    <script>
+        // =======================================================
+        // 第 1 部分：API 链接 (基于你的发布 ID)
+        // =======================================================
+        const SHEET_DATA_URL = 'https://docs.google.com/spreadsheets/d/2PACX-1vTJU5sgOoD5tKC4PInPBE6s7Bil5MFkV4xTGAg_q-sjnNFcX31Jca0zyih8jBU2dpdujAkUpwF31NGQ/gviz/tq?tqx=out:json&tq&gid=0';
 
-    <!-- 产品列表 -->
-    <div id="product-list" class="product-grid">
-      <!-- 由 JS 渲染 -->
-    </div>
-  </main>
+        // =======================================================
+        // 第 2 部分：数据获取主函数
+        // =======================================================
+        async function fetchProducts() {
+            const container = document.getElementById('product-container');
+            container.innerHTML = '<p>正在加载...</p>'; // 显示加载状态
+            try {
+                const response = await fetch(SHEET_DATA_URL);
+                const text = await response.text();
+                
+                // 关键步骤：清理 Google Visualization API 返回的 JSON 文本
+                // 移除前缀： /*O_o*/ google.visualization.Query.setResponse( 和后缀： );
+                const jsonString = text.substring(47).slice(0, -2); 
+                const data = JSON.parse(jsonString);
+                
+                // 转换为产品数组
+                const products = transformSheetData(data);
+                
+                // 渲染到网页上
+                renderProducts(products); 
 
-  <!-- 全局变量存储数据 -->
-  <script>
-    let allProducts = [];
-    let currentModelFilter = '';
-    let currentPartFilter = '';
-
-    // 从 JSON 加载数据
-    fetch('products.json')
-      .then(response => response.json())
-      .then(data => {
-        allProducts = data;
-        renderProducts(allProducts);
-      })
-      .catch(error => console.error('加载产品数据失败:', error));
-  </script>
-
-  <!-- 筛选与渲染逻辑 -->
-  <script>
-    // 1. 渲染产品列表
-    function renderProducts(products) {
-      const container = document.getElementById('product-list');
-      container.innerHTML = products.map(p => {
-        // 默认主图
-        const mainImage = (p.images && p.images[0]) ? p.images[0].url : 'images/placeholder.jpg';
-        const mainImageCaption = (p.images && p.images[0]) ? p.images[0].caption || '' : '';
-
-        // 附图缩略图
-        const thumbnails = (p.images && p.images.slice(1)) ? p.images.slice(1).map(img => `
-          <div class="thumb-container">
-            <img src="${img.url}" class="thumb" alt="附图" onclick="swapImage(this, '${p.id}')">
-            ${img.caption ? `<p class="thumb-caption">${img.caption}</p>` : ''}
-          </div>
-        `).join('') : '';
-
-        // 产品信息
-        const details = `
-          <p><strong>型号:</strong> ${p.model || 'N/A'}</p>
-          <p><strong>尺寸:</strong> ${p.size || 'N/A'}</p>
-          <p><strong>重量:</strong> ${p.weight || 'N/A'}</p>
-          <p><strong>包装:</strong> ${p.packaging || 'N/A'}</p>
-          <p><strong>每箱数量:</strong> ${p.quantity_per_box || 'N/A'}</p>
-          <p><strong>价格:</strong> ¥${p.price}</p>
-          <p><strong>起订量:</strong> ${p.min_order_qty || 'N/A'}</p>
-          <p><strong>其他描述:</strong> ${p.description || 'N/A'}</p>
-        `;
-
-        return `
-          <div class="product" data-models="${p.models.join(', ')}" data-part="${p.part}">
-            <div class="image-section">
-              <img src="${mainImage}" class="main-image" id="main-${p.id}" alt="${p.name}">
-              ${mainImageCaption ? `<p class="main-caption">${mainImageCaption}</p>` : ''}
-              <div class="thumbnails">
-                ${thumbnails}
-              </div>
-            </div>
-            <div class="info-section">
-              <h3>${p.name}</h3>
-              ${details}
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // 2. 筛选逻辑
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const filterType = btn.getAttribute('data-filter');
-        const filterValue = btn.getAttribute('data-value');
-
-        if (filterType === 'model') {
-          currentModelFilter = filterValue;
-        } else if (filterType === 'part') {
-          currentPartFilter = filterValue;
+            } catch (error) {
+                console.error('加载 Google Sheets 数据失败:', error);
+                container.innerHTML = '<p style="color: red;">抱歉，加载产品数据失败。请检查 Google Sheets 是否已发布。</p>';
+            }
         }
 
-        // 更新按钮选中状态
-        document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+        // =======================================================
+        // 第 3 部分：A 到 S 列结构定制的转换函数 (基于你提供的 19 个标题)
+        // =======================================================
+        function transformSheetData(sheetData) {
+            const rows = sheetData.table.rows;   
+            
+            // 过滤掉所有标题行 (假设 B 列是标题“名称”) 和空行
+            const filteredRows = rows.filter(row => {
+                const name = row.c[1] && row.c[1].v !== undefined ? row.c[1].v : null;
+                return name && name !== '名称';
+            });
 
-        // 应用筛选
-        applyFilters();
-      });
-    });
+            const productArray = filteredRows.map(row => {
+                let product = {};
+                
+                // 注意：我们直接访问 row.c[i]，确保你的 Sheet 发布内容与此列索引一致
+                
+                // --- 核心产品信息 (A 到 D) ---
+                product.product_id = row.c[0] ? (row.c[0].v || row.c[0].f) : null; 
+                product.name = row.c[1] ? (row.c[1].v || row.c[1].f) : null;
+                product.part_type = row.c[2] ? (row.c[2].v || row.c[2].f) : null;
+                product.vehicle_model = row.c[3] ? (row.c[3].v || row.c[3].f) : null;
 
-    // 3. 应用筛选
-    function applyFilters() {
-      const filtered = allProducts.filter(p => {
-        const matchesModel = currentModelFilter === '' || p.models.includes(currentModelFilter);
-        const matchesPart = currentPartFilter === '' || p.part === currentPartFilter;
-        return matchesModel && matchesPart;
-      });
-      renderProducts(filtered);
-    }
+                // --- 规格信息 (E 到 J) ---
+                product.dimensions = row.c[4] ? (row.c[4].v || row.c[4].f) : null;
+                product.weight = row.c[5] ? (row.c[5].v || row.c[5].f) : null;
+                
+                // 价格 (G 列) - 尝试转换为数字
+                product.price = row.c[6] ? parseFloat(row.c[6].v) : 0; 
 
-    // 4. 重置筛选
-    document.getElementById('reset-filters').addEventListener('click', () => {
-      currentModelFilter = '';
-      currentPartFilter = '';
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      document.querySelector('.filter-btn[data-value=""]').classList.add('active'); // 全部车型
-      document.querySelector('.filter-btn[data-value=""][data-filter="part"]').classList.add('active'); // 全全部位
-      renderProducts(allProducts);
-    });
+                product.package_type = row.c[7] ? (row.c[7].v || row.c[7].f) : null;
+                // 尝试转换为整数
+                product.qty_per_carton = row.c[8] ? parseInt(row.c[8].v) : 0; 
+                product.moq = row.c[9] ? parseInt(row.c[9].v) : 1; 
 
-    // 5. 切换主图
-    function swapImage(thumb, productId) {
-      const newSrc = thumb.src;
-      document.getElementById(`main-${productId}`).src = newSrc;
-    }
-  </script>
+                // --- 描述和状态 (K 到 N) ---
+                product.description = row.c[10] ? (row.c[10].v || row.c[10].f) : '';
+                product.other_desc = row.c[11] ? (row.c[11].v || row.c[11].f) : '';
+                product.status = row.c[12] ? (row.c[12].v || row.c[12].f) : '在售';
+                product.notes = row.c[13] ? (row.c[13].v || row.c[13].f) : '';
+                
+                // --- 图片链接 (O 到 S) ---
+                // O 列 图片1 (你的主要图片)
+                product.image_url = row.c[14] ? (row.c[14].v || row.c[14].f) : 'placeholder.jpg';
+                
+                product.image_url_2 = row.c[15] ? (row.c[15].v || row.c[15].f) : null;
+                product.image_url_3 = row.c[16] ? (row.c[16].v || row.c[16].f) : null;
+                product.image_url_4 = row.c[17] ? (row.c[17].v || row.c[17].f) : null;
+                product.image_url_5 = row.c[18] ? (row.c[18].v || row.c[18].f) : null;
 
+                return product;
+            });
+
+            return productArray; 
+        }
+
+        // =======================================================
+        // 第 4 部分：产品渲染函数
+        // =======================================================
+        function renderProducts(products) {
+            const container = document.getElementById('product-container');
+            container.innerHTML = ''; // 清空加载状态
+            
+            if (products.length === 0) {
+                container.innerHTML = '<p>没有找到任何产品。</p>';
+                return;
+            }
+
+            products.forEach(product => {
+                // 创建产品卡片 div
+                const productCard = document.createElement('div');
+                productCard.className = 'product-card';
+                productCard.setAttribute('data-product-id', product.product_id); // 可用于筛选
+
+                // 构造卡片内容
+                productCard.innerHTML = `
+                    <img src="${product.image_url}" alt="${product.name}" class="product-image">
+                    <div class="product-details">
+                        <h3 class="product-name">${product.name}</h3>
+                        <p class="product-price">¥${product.price ? product.price.toFixed(2) : '暂无价格'}</p>
+                        <p class="product-model">型号: ${product.vehicle_model || 'N/A'}</p>
+                        <p class="product-part-type">部位: ${product.part_type || 'N/A'}</p>
+                        <p class="product-desc">${product.description.substring(0, 50)}...</p>
+                        <button class="add-to-cart">查看详情</button>
+                    </div>
+                `;
+                
+                // 将卡片添加到容器中
+                container.appendChild(productCard);
+            });
+        }
+
+        // 启动数据加载流程
+        fetchProducts(); 
+    </script>
 </body>
 </html>
