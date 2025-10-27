@@ -16,7 +16,7 @@
     <div class="filters">
       <div class="filter-group">
         <label>按车型筛选：</label>
-        <div class="filter-buttons" id="model-filters">
+        <div class="filter-buttons" id="model-filters"> 
           <button class="filter-btn active" data-filter="model" data-value="">全部车型</button>
           <button class="filter-btn" data-filter="model" data-value="CG125">CG125</button>
           <button class="filter-btn" data-filter="model" data-value="GN125">GN125</button>
@@ -31,7 +31,7 @@
 
       <div class="filter-group">
         <label>按部位筛选：</label>
-        <div class="filter-buttons" id="part-filters">
+        <div class="filter-buttons" id="part-filters"> 
           <button class="filter-btn active" data-filter="part" data-value="">全部部位</button>
         </div>
       </div>
@@ -58,6 +58,7 @@
     // =======================================================
     // 谷歌表格 API 配置
     // =======================================================
+    // 请确认这是你最新的 Google Sheet ID
     const SHEET_DATA_URL = 'https://docs.google.com/spreadsheets/d/1_20vmfXJly3oPTEIMdSAPWy8bcUxi2pn__hcAF7gA3Q/gviz/tq?tqx=out:json&tq&gid=0';
     
     // 辅助函数 1：安全获取单元格的值并清理空格
@@ -71,28 +72,21 @@
         return rawVal;
     };
 
-   // 辅助函数 2：【修复】自动转换 Google Drive 共享链接为直接内容链接
-function transformDriveLink(url) {
-    if (!url || typeof url !== 'string') return url;
+    // 辅助函数 2：自动转换 Google Drive 共享链接为直接内容链接
+    function transformDriveLink(url) {
+        if (!url || typeof url !== 'string') return url;
 
-    // 优化的正则表达式：
-    // 1. 匹配标准共享格式：/file/d/FILE_ID/view
-    // 2. 匹配文件夹共享格式：/open?id=FILE_ID
-    // 3. 匹配 /d/FILE_ID 的所有格式
-    
-    // 正则表达式将忽略末尾的任何参数 (?...)
-    const match = url.match(/https?:\/\/drive\.google\.com\/((?:file|open)\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
+        // 优化的正则表达式，匹配 FILE_ID，忽略结尾的 /view 和参数
+        const match = url.match(/https?:\/\/drive\.google\.com\/((?:file|open)\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
 
-    if (match && match[2]) {
-        // match[2] 是捕获到的文件 ID
-        const fileId = match[2];
-        // 构造可以直接加载内容的链接
-        return `https://drive.google.com/uc?export=view&id=${fileId}`;
+        if (match && match[2]) {
+            const fileId = match[2];
+            // 构造可以直接加载内容的链接
+            return `https://drive.google.com/uc?export=view&id=${fileId}`;
+        }
+        
+        return url;
     }
-    
-    // 如果不是 Google Drive 链接，返回原链接
-    return url;
-}
 
     // =======================================================
     // 1. 数据获取主函数 
@@ -105,11 +99,13 @@ function transformDriveLink(url) {
             const response = await fetch(SHEET_DATA_URL);
             const text = await response.text();
             
+            // 清理 Google Visualization API 返回的 JSON 文本
             const jsonString = text.substring(47).slice(0, -2); 
             const data = JSON.parse(jsonString);
             
             allProducts = transformSheetData(data);
             
+            // 绑定事件和渲染
             renderFilters(allProducts); 
             bindFilterEvents();
             renderProducts(allProducts); 
@@ -121,7 +117,7 @@ function transformDriveLink(url) {
     }
 
     // =======================================================
-    // 2. A 到 S 列结构定制的转换函数 (已集成自动链接转换)
+    // 2. A 到 S 列结构定制的转换函数 
     // =======================================================
     function transformSheetData(sheetData) {
         const rows = sheetData.table.rows;   
@@ -141,7 +137,7 @@ function transformDriveLink(url) {
             const modelVal = getTrimmedVal(row, 3);
             product.models = modelVal ? [modelVal] : []; // D 列
             
-            // ... (其他字段映射不变)
+            // ... (其他字段映射)
             product.size = getTrimmedVal(row, 4);      
             product.weight = getTrimmedVal(row, 5);    
             product.price = getTrimmedVal(row, 6) ? parseFloat(getTrimmedVal(row, 6)) : 0; 
@@ -153,12 +149,11 @@ function transformDriveLink(url) {
             product.status = getTrimmedVal(row, 12);    
             product.notes = getTrimmedVal(row, 13);     
             
-            // O 到 S 列: 图片链接处理 (!!! 关键修改部分 !!!)
+            // O 到 S 列: 图片链接处理 (应用自动转换)
             product.images = [];
             for(let i = 14; i <= 18; i++) {
                 let url = getTrimmedVal(row, i);
                 if (url) {
-                    // 自动转换 Google Drive 链接
                     url = transformDriveLink(url); 
                     product.images.push({ url: url, caption: null });
                 }
@@ -174,7 +169,7 @@ function transformDriveLink(url) {
     }
     
     // =======================================================
-    // 3. 动态生成筛选按钮
+    // 3. 动态生成筛选按钮 (核心功能)
     // =======================================================
     function renderFilters(products) {
         const partTypes = new Set();
@@ -186,7 +181,7 @@ function transformDriveLink(url) {
         
         const partFilterContainer = document.getElementById('part-filters');
         
-        // 1. 保留“全部部位”按钮
+        // 1. 清空并保留“全部部位”按钮
         const allPartsButton = partFilterContainer.querySelector('.filter-btn[data-filter="part"][data-value=""]');
         partFilterContainer.innerHTML = '';
         if (allPartsButton) {
@@ -237,10 +232,10 @@ function transformDriveLink(url) {
         applyFilters();
     }
 
-
     // 6. 应用筛选
     function applyFilters() {
       const filtered = allProducts.filter(p => {
+        // p.models 是数组，使用 includes 检查
         const matchesModel = currentModelFilter === '' || p.models.includes(currentModelFilter);
         const matchesPart = currentPartFilter === '' || p.part === currentPartFilter;
         return matchesModel && matchesPart;
@@ -260,7 +255,7 @@ function transformDriveLink(url) {
       renderProducts(allProducts);
     });
     
-    // 8. 渲染产品列表 (保持不变)
+    // 8. 渲染产品列表
     function renderProducts(products) {
       const container = document.getElementById('product-list');
       container.innerHTML = products.map(p => {
@@ -315,7 +310,6 @@ function transformDriveLink(url) {
          mainImageElement.src = newSrc;
       }
     }
-
 
     // 启动数据加载流程
     fetchProducts(); 
