@@ -56,11 +56,11 @@
     let currentPartFilter = '';
     
     // =======================================================
-    // 谷歌表格 API 配置 - 使用 Document ID
+    // 谷歌表格 API 配置
     // =======================================================
     const SHEET_DATA_URL = 'https://docs.google.com/spreadsheets/d/1_20vmfXJly3oPTEIMdSAPWy8bcUxi2pn__hcAF7gA3Q/gviz/tq?tqx=out:json&tq&gid=0';
     
-    // 辅助函数：安全获取单元格的值并清理空格 (修复筛选的关键)
+    // 辅助函数 1：安全获取单元格的值并清理空格
     const getTrimmedVal = (row, index) => {
         const cell = row.c[index];
         if (!cell) return null;
@@ -70,6 +70,23 @@
         }
         return rawVal;
     };
+
+    // 辅助函数 2：【新增】自动转换 Google Drive 共享链接为直接内容链接
+    function transformDriveLink(url) {
+        if (!url || typeof url !== 'string') return url;
+
+        // 匹配 drive.google.com/file/d/FILE_ID/view 的格式
+        const match = url.match(/https:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)\/view/);
+        
+        if (match && match[1]) {
+            const fileId = match[1];
+            // 构造可以直接加载内容的链接
+            return `https://drive.google.com/uc?export=view&id=${fileId}`;
+        }
+        
+        // 如果不是标准 Google Drive 共享链接，返回原链接（可能是外部 CDN 或其他服务）
+        return url;
+    }
 
     // =======================================================
     // 1. 数据获取主函数 
@@ -82,20 +99,13 @@
             const response = await fetch(SHEET_DATA_URL);
             const text = await response.text();
             
-            // 清理 Google Visualization API 返回的 JSON 文本
             const jsonString = text.substring(47).slice(0, -2); 
             const data = JSON.parse(jsonString);
             
-            // 转换为产品数组，并赋值给全局变量
             allProducts = transformSheetData(data);
             
-            // !!! 核心改进：动态生成筛选按钮 !!!
             renderFilters(allProducts); 
-            
-            // 绑定所有筛选按钮事件 (包括静态和动态生成的)
             bindFilterEvents();
-            
-            // 渲染产品列表
             renderProducts(allProducts); 
 
         } catch (error) {
@@ -105,12 +115,11 @@
     }
 
     // =======================================================
-    // 2. A 到 S 列结构定制的转换函数 (包含 .trim() 修复)
+    // 2. A 到 S 列结构定制的转换函数 (已集成自动链接转换)
     // =======================================================
     function transformSheetData(sheetData) {
         const rows = sheetData.table.rows;   
         
-        // 过滤掉标题行 (假设 B 列是标题“名称”) 和空行
         const filteredRows = rows.filter(row => {
             const name = getTrimmedVal(row, 1);
             return name && name !== '名称';
@@ -119,16 +128,14 @@
         const productArray = filteredRows.map(row => {
             const product = {};
             
-            // C 列: 部位类型 -> p.part (用于筛选，已清理)
-            product.part = getTrimmedVal(row, 2);
-
-            // D 列: 车型 -> p.models (数组, 用于筛选，已清理)
-            const modelVal = getTrimmedVal(row, 3);
-            product.models = modelVal ? [modelVal] : []; 
-            
-            // ... (其它 16 个字段的映射保持不变)
+            // --- 核心产品信息 (A 到 D) ---
             product.id = getTrimmedVal(row, 0); 
             product.name = getTrimmedVal(row, 1);
+            product.part = getTrimmedVal(row, 2); // C 列
+            const modelVal = getTrimmedVal(row, 3);
+            product.models = modelVal ? [modelVal] : []; // D 列
+            
+            // ... (其他字段映射不变)
             product.size = getTrimmedVal(row, 4);      
             product.weight = getTrimmedVal(row, 5);    
             product.price = getTrimmedVal(row, 6) ? parseFloat(getTrimmedVal(row, 6)) : 0; 
@@ -140,11 +147,13 @@
             product.status = getTrimmedVal(row, 12);    
             product.notes = getTrimmedVal(row, 13);     
             
-            // O 到 S 列: 图片链接 -> 映射到 p.images 数组结构 
+            // O 到 S 列: 图片链接处理 (!!! 关键修改部分 !!!)
             product.images = [];
             for(let i = 14; i <= 18; i++) {
-                const url = getTrimmedVal(row, i);
+                let url = getTrimmedVal(row, i);
                 if (url) {
+                    // 自动转换 Google Drive 链接
+                    url = transformDriveLink(url); 
                     product.images.push({ url: url, caption: null });
                 }
             }
@@ -159,10 +168,9 @@
     }
     
     // =======================================================
-    // 3. 动态生成筛选按钮 (核心改进)
+    // 3. 动态生成筛选按钮
     // =======================================================
     function renderFilters(products) {
-        // 收集所有唯一的部位类型 (Set 自动去重)
         const partTypes = new Set();
         products.forEach(p => {
             if (p.part) {
@@ -192,15 +200,10 @@
     }
 
     // =======================================================
-    // 4. 统一绑定所有筛选按钮事件 (适用于静态和动态生成的按钮)
+    // 4. 统一绑定所有筛选按钮事件
     // =======================================================
     function bindFilterEvents() {
-        // 移除旧的事件监听器 (避免重复绑定)
-        // 注意：由于是动态替换元素内容，这里理论上不需要手动移除，但统一绑定更安全
-        
-        // 绑定所有 .filter-btn 按钮
         document.querySelectorAll('.filter-btn').forEach(btn => {
-            // 先移除可能存在的旧监听器，然后添加新监听器
             btn.removeEventListener('click', handleFilterClick); 
             btn.addEventListener('click', handleFilterClick);
         });
@@ -222,11 +225,9 @@
             currentPartFilter = filterValue;
         }
 
-        // 更新按钮选中状态
         document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        // 应用筛选
         applyFilters();
     }
 
@@ -234,7 +235,6 @@
     // 6. 应用筛选
     function applyFilters() {
       const filtered = allProducts.filter(p => {
-        // 筛选逻辑依赖于 transformSheetData 中 p.models 和 p.part 的准确性
         const matchesModel = currentModelFilter === '' || p.models.includes(currentModelFilter);
         const matchesPart = currentPartFilter === '' || p.part === currentPartFilter;
         return matchesModel && matchesPart;
@@ -247,7 +247,6 @@
       currentModelFilter = '';
       currentPartFilter = '';
       
-      // 重置按钮的 active 状态
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       document.querySelector('.filter-btn[data-filter="model"][data-value=""]').classList.add('active'); 
       document.querySelector('.filter-btn[data-filter="part"][data-value=""]').classList.add('active'); 
@@ -255,7 +254,7 @@
       renderProducts(allProducts);
     });
     
-    // 8. 渲染产品列表 (与你原来的逻辑保持一致)
+    // 8. 渲染产品列表 (保持不变)
     function renderProducts(products) {
       const container = document.getElementById('product-list');
       container.innerHTML = products.map(p => {
